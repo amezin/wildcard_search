@@ -46,6 +46,44 @@ std::vector<match> wildcard_match_naive(const char *str, const char *pattern)
     return all_matches;
 }
 
+static void wildcard_longest_naive_internal(const char *str, const char *pattern, std::size_t i, match &longest)
+{
+    if (!*pattern) {
+        match this_match(str, &str[i]);
+        if (this_match.length() > longest.length()) {
+            longest = this_match;
+        } else if (this_match.length() == longest.length() && this_match < longest) {
+            longest = this_match;
+        }
+        return;
+    }
+
+    if (*pattern == '*') {
+        wildcard_longest_naive_internal(str, pattern + 1, i, longest);
+    }
+
+    if (!str[i]) {
+        return;
+    }
+
+    if (str[i] == *pattern || *pattern == '?') {
+        wildcard_longest_naive_internal(str, pattern + 1, i + 1, longest);
+    }
+    if (*pattern == '*') {
+        wildcard_longest_naive_internal(str, pattern, i + 1, longest);
+    }
+}
+
+match wildcard_longest_naive(const char *str, const char *pattern)
+{
+    match longest;
+    auto str_len = std::strlen(str);
+    for (size_t i = 0; i <= str_len; i++) {
+        wildcard_longest_naive_internal(str + i, pattern, 0, longest);
+    }
+    return longest;
+}
+
 /*
  * --- Recursive solution that can be rewritten as DP solution ---
  */

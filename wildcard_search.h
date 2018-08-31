@@ -23,3 +23,4 @@ bool operator ==(const match &, const match &);
 bool operator !=(const match &, const match &);
 
 std::vector<match> wildcard_match(const char *str, const char *pattern);
+match wildcard_longest(const char *str, const char *pattern);

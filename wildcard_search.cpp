@@ -65,6 +65,8 @@ bool operator!=(const match &a, const match &b)
     return match_diff(a, b) != 0;
 }
 
+namespace {
+
 template<typename T>
 class dp_matrix
 {
@@ -98,20 +100,89 @@ private:
     std::size_t i;
 };
 
-/*
- * O(str_len * str_len * pattern_len) time complexity.
- * O(pattern_len * str_len) additional memory.
- */
-std::vector<match> wildcard_match(const char *str, const char *pattern)
+struct all_matches
 {
-    std::vector<match> all_matches;
+    std::vector<const char *> matches;
+    typedef std::vector<match> result_type;
+
+    all_matches()
+    {
+    }
+
+    explicit all_matches(const char *match)
+    {
+        matches.push_back(match);
+    }
+
+    static all_matches merge(const all_matches &a, const all_matches &b)
+    {
+        all_matches merged;
+        std::set_union(a.matches.begin(), a.matches.end(),
+                       b.matches.begin(), b.matches.end(),
+                       std::back_inserter(merged.matches));
+        return merged;
+    }
+
+    void add_to_result(result_type &result, const char *match_end)
+    {
+        for (auto &match_start : matches) {
+            result.push_back(match(match_start, match_end));
+        }
+    }
+};
+
+struct longest_match
+{
+    const char *match_start;
+    typedef match result_type;
+
+    longest_match()
+        : match_start(nullptr)
+    {
+    }
+
+    explicit longest_match(const char *match_start)
+        : match_start(match_start)
+    {
+    }
+
+    static longest_match merge(const longest_match &a, const longest_match &b)
+    {
+        if (!a.match_start) {
+            return longest_match(b.match_start);
+        } else if (!b.match_start) {
+            return longest_match(a.match_start);
+        } else {
+            return longest_match(std::min(a.match_start, b.match_start));
+        }
+    }
+
+    void add_to_result(result_type &result, const char *match_end)
+    {
+        if (!match_start) {
+            return;
+        }
+
+        result_type this_match(match_start, match_end);
+        if (result.length() < this_match.length()) {
+            result = this_match;
+        } else if (result.length() == this_match.length() && this_match < result) {
+            result = this_match;
+        }
+    }
+};
+
+template<typename M>
+typename M::result_type wildcard_match_internal(const char *str, const char *pattern)
+{
+    typename M::result_type all_matches;
 
     auto str_len = std::strlen(str);
     auto pattern_len = std::strlen(pattern);
 
-    dp_matrix<std::vector<const char *>> matches(pattern_len + 1);
+    dp_matrix<M> matches(pattern_len + 1);
     for (size_t i = 0; i <= str_len; i++) {
-        matches[i][0].push_back(&str[i]);
+        matches[i][0] = M(&str[i]);
 
         for (size_t j = 1; j <= pattern_len; j++) {
             if (i) {
@@ -122,21 +193,36 @@ std::vector<match> wildcard_match(const char *str, const char *pattern)
 
             if (pattern[j - 1] == '*') {
                 if (i) {
-                    std::set_union(matches[i][j - 1].begin(), matches[i][j - 1].end(),
-                                   matches[i - 1][j].begin(), matches[i - 1][j].end(),
-                                   back_inserter(matches[i][j]));
+                    matches[i][j] = M::merge(matches[i][j - 1], matches[i - 1][j]);
                 } else {
                     matches[i][j] = matches[i][j - 1];
                 }
             }
         }
 
-        for (auto &match : matches[i][pattern_len]) {
-            all_matches.push_back({ match, &str[i] });
-        }
-
+        matches[i][pattern_len].add_to_result(all_matches, &str[i]);
         matches.next_row();
     }
 
     return all_matches;
+}
+
+}
+
+/*
+ * O(str_len * str_len * pattern_len) time complexity.
+ * O(pattern_len * str_len) additional memory.
+ */
+std::vector<match> wildcard_match(const char *str, const char *pattern)
+{
+    return wildcard_match_internal<all_matches>(str, pattern);
+}
+
+/*
+ * O(str_len * pattern_len) time complexity.
+ * O(pattern_len) additional memory.
+ */
+match wildcard_longest(const char *str, const char *pattern)
+{
+    return wildcard_match_internal<longest_match>(str, pattern);
 }
